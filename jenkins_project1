@@ -1,0 +1,44 @@
+node('master') {
+    stage("Env Variables") {
+    echo "The build number is ${env.BUILD_NUMBER}"
+    echo "You can also use \${BUILD_NUMBER} -> ${BUILD_NUMBER}"
+    sh 'echo "I can access $BUILD_NUMBER in shell command as well."'
+}
+    stage('git_clone_maven') {
+    git 'https://github.com/vtvc/mahalogin.git'
+}
+    stage('maven_build') {
+    sh label: '', script: 'mvn clean install'
+}
+    stage('git_clone for dockerfile') {
+    git 'https://github.com/cherukuri-2627/Dockerfile.git'
+}
+    stage('docker_image_build') {
+    sh label: '', script: 'docker build -t admin9666/k8s_pipeline:${BUILD_NUMBER} . '
+}
+    stage('docker_image_push') {
+    withCredentials([string(credentialsId: 'docker', variable: 'dockerpass')]) {
+    sh label: '', script: 'docker login -u admin9666 -p ${dockerpass}'
+    sh label: '', script: 'docker push admin9666/k8s_pipeline:${BUILD_NUMBER}'
+}
+}
+node('kops_k8') {
+    stage('git clone for deploy.yml') {
+    git 'https://github.com/cherukuri-2627/k8s2.git'
+}
+    stage('create the deployment pods'){
+        sh label: '', script: 'kubectl apply -f mydeploy.yml --record'
+}
+    stage('create the sevice pods'){
+        sh label: '', script: 'kubectl apply -f mysvc.yml'
+}
+    stage('check_for_pods_deploy_svc_all_ep') {
+    sh label: '', script: '''kubectl get pods
+kubectl get deploy
+kubectl get svc
+kubectl get nodes
+kubectl get all
+kubectl get ep'''
+}
+}
+}
